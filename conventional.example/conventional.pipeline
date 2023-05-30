@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# Author: Kun Sun @ SZBL
+#
+set -o nounset
+set -o errexit
+#command || { echo "command failed"; exit 1; }
+
+## NOTE: this script is designed to compare the results and speed with Freefly
+
+if [ $# -lt 1 ]	## no parameters
+then
+	echo
+	echo "Usage: $0 [options] <-x bowtie2.index> <-g genome.fa> <-o output.prefix> <-1 read1.fq> <-2 read2.fq>"
+	echo
+	echo "Options:"
+	echo "  -x path    Set the path to bowtie2 index"
+	echo "  -g path    Set the path to the fasta sequence of the genome"
+	echo "  -s size    Set minimum read size. Default: 36"
+	echo "  -t thread  Set running threads. Default: 8"
+	echo "  -k kit     Set kit for trimming adaptors. Default: illumina"
+	echo "  -m kmer    Set k-mer for motif analysis. Default: 4"
+	echo "  -q score   Mininum mapping score for analysis. Default: 30"
+	echo
+	exit 2
+fi >/dev/stderr
+
+# default parameters
+bowtie2index=""
+fasta=""
+minSize=36
+cpunum=8
+seqKit=illumina
+kmer=4
+minQ=30
+
+output=""
+fqlist=""
+read1=""
+read2=""
+
+# read command line parameters
+while getopts ":x:g:s:o:1:2:t:k:m:q:" OPTION
+do
+	case $OPTION in
+		x)bowtie2index="$OPTARG"
+			;;
+		g)fasta="$OPTARG"
+			;;
+		o)output="$OPTARG"
+			;;
+		1)read1="$OPTARG"
+			;;
+		2)read2="$OPTARG"
+			;;
+		s)minSize="$OPTARG"
+			;;
+		t)cpunum="$OPTARG"
+			;;
+		k)seqKit="$OPTARG"
+			;;
+		m)kmer="$OPTARG"
+			;;
+		q)minQ="$OPTARG"
+			;;
+		?)echo -e "\n\n***** ERROR: unsupported option detected. *****\n"
+			;;
+	esac
+done
+
+## check parameters
+prgbase=`dirname $0`
+if [ ! -s $bowtie2index.1.bt2 ]
+then
+	echo "ERROR: bowtie2 index not found!"
+	exit 100
+fi
+
+if [ -z "$read1" ] || [ -z "$read2" ]
+then
+	echo "Error: No input file!"
+	exit 101
+fi
+
+if [ -z "$output" ]
+then
+	echo "Error: No output file!"
+	exit 102
+fi
+
+if [ ! -s "$fasta" ]
+then
+	echo "ERROR: genome sequence file not found!"
+	exit 103
+fi
+
+## use all threads if the parameter is set to 0
+[ $cpunum == 0 ] && cpunum=`cat /proc/cpuinfo | grep processor | wc -l`
+
+## Phred score cutoff for Ktrim
+echo "Running Ktrim ..."
+$prgbase/ktrim -1 $read1 -2 $read2 -t $cpunum -o $output.ktrim -s $minSize -k $seqKit
+
+## parameters for bowtie2
+param="-q --score-min L,0,-0.2 --ignore-quals --no-unal --no-head -p $cpunum"
+PEspc="--minins 0 --maxins 1000 --no-mixed --no-discordant"
+$prgbase/bowtie2 $param $PEspc -x $bowtie2index -1 $output.ktrim.read1.fq -2 $output.ktrim.read2.fq -S $output.sam 2>$output.bowtie2.log
+
+## remove dupliate and sam to bam conversion
+echo "Removing duplicates and extracting size/motif ..."
+## note: Ksam_rmdup uses rewind() to extract the BEST read for duplicates, so it cannot use pipe to read input
+$prgbase/ksam_rmdup.pipe $prgbase/hs.info pe $output.sam $output.rmdup | perl $prgbase/calc.size.motif.pl $fasta - $output $kmer $minQ
+## note that here I used the larger size in GRCh38 and Han1 for each chromosome in hs.info
+
+## clean up
+rm -f $output.ktrim.read1.fq $output.ktrim.read2.fq $output.sam
+

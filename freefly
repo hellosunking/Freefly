@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# Author: Kun Sun @ SZBL (sunkun@szbl.ac.cn)
+# Date  : 2023.5.1
+#
+set -o nounset
+set -o errexit
+
+VERSION="1.0.0 (May 2023)"
+## NOTE: thread is fixed to 8 in the current version
+
+function usage() {
+echo -e "
+Freefly: Rapid unbiased fragmentomics analysis of cell-free DNA
+
+Usage: freefly [options] -1 <R1.fq[.gz]> -2 <R2.fq[.gz]> -o <sid>
+
+Compulsory parameters:
+  -1 R1.fq[.gz]     Specify the path to the files containing read 1
+  -2 R2.fq[.gz]     Specify the path to the files containing read 2
+
+                    If you have multiple files for your sample, use ',' to separate them;
+                    Gzip-compressed files (with a .gz suffix) are supported
+
+  -o out.prefix     Specify the prefix of the output files
+																										
+Optional parameters:
+  -s size           Minimum read size to be kept after trimming (default: 36; must be larger than 10)
+  -k kit            Specify the sequencing kit to use built-in adapters
+                    Currently supports 'Illumina' (default), 'Nextera', and 'BGI'
+  -m kmer           Kmer length to extract motif (default: 4)
+  -Q score          Minimum Phred score to extract motif (default: 30)
+
+  -v                Show software version and exit
+
+Freefly is freely available at https://github.com/hellosunking/Freefly
+"
+}
+
+if [ $# -lt 1 ]
+then
+	usage
+	exit 2
+fi >/dev/stderr
+
+PRG=`readlink -f $0`
+PRG=`dirname $PRG`
+
+R1fq=""
+R2fq=""
+sid=""
+seqKit=illumina
+minSize=36
+kmer=4
+minQ=30
+#thread=8
+showVer=0
+
+while getopts ":1:2:o:k:s:t:m:Q:v" OPTION
+do
+	case $OPTION in
+		1)R1fq="$OPTARG"
+			;;
+		2)R2fq="$OPTARG"
+			;;
+		o)sid="$OPTARG"
+			;;
+		k)seqKit="$OPTARG"
+			;;
+		s)minSize="$OPTARG"
+			;;
+		t)thread="$OPTARG"
+			;;
+		m)kmer="$OPTARG"
+			;;
+		Q)minQ="$OPTARG"
+			;;
+		v)showVer=1
+			;;
+		?)echo "ERROR: unsupported option detected." && exit 2
+			;;
+	esac
+done >/dev/stderr
+
+if [ $showVer == 1 ]
+then
+	echo $VERSION
+	exit
+fi
+
+#[ $thread == 0 ] && thread=`cat /proc/cpuinfo | grep processor | wc -l`
+#[ $thread -gt 16 ] && thread=16
+
+$PRG/ktrim -t 4 -k $seqKit -s $minSize -o $sid -1 $R1fq -2 $R2fq -c | \
+$PRG/krmdup -i /dev/stdin -o $sid.rmdup | \
+$PRG/flash -q --interleaved-input -m 10 -M 150 -t 6 -o $sid.flash -To -c - | \
+perl $PRG/extract.size.motif.pl - $sid $kmer $minQ
+
+## plot size, and motif?
+#R --slave --args $sid < $PRG/util/plot.size.R
