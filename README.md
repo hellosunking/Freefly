@@ -1,6 +1,6 @@
 # Freefly: Rapid unbiased fragmentomics analysis of cell-free DNA
 Version 1.0.0, May 2023<br />
-Authors: Xiaoyi Liu, Mengqi Yang, Dingxue Hu, and Kun Sun \(sunkun@szbl.ac.cn\)<br />
+Author: Kun Sun \(sunkun@szbl.ac.cn\)<br />
 <br />
 Distributed under the
 [GNU General Public License v3.0 \(GPLv3\)](https://www.gnu.org/licenses/gpl-3.0.en.html "GPLv3")
