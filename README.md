@@ -74,7 +74,7 @@ user@linux$ freefly -1 /path/to/read1.fq.gz -2 /path/to/read2.fq.gz -o test.samp
 Your data is generated using BGI platform with 2 lanes, and you want to analyze 6-mer motifs, then you can run
 the analysis using the following command:
 ```
-user@linux$ freefly -k BGI -m 6 -1 /path/to/L1.R1.fq.gz,/path/to/L2.R1.fq.gz /path/to/L1.R2.fq.gz,/path/to/L2.R2.fq.gz -o test.sample2
+user@linux$ freefly -k BGI -m 6 -1 /path/to/L1.R1.fq.gz,/path/to/L2.R1.fq.gz -2 /path/to/L1.R2.fq.gz,/path/to/L2.R2.fq.gz -o test.sample2
 ```
 
 ## Testing dataset
